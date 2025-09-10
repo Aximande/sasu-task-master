@@ -12,6 +12,8 @@ import { useAuthStore } from './store/authStore';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
+import TaxCalculation from './pages/TaxCalculation';
+import TaxCalculationV2 from './pages/TaxCalculationV2';
 
 // Components
 import Layout from './components/layout/Layout';
@@ -91,6 +93,8 @@ function App() {
             <Route element={<PrivateRoute />}>
               <Route element={<Layout />}>
                 <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/tax-calculation-old" element={<TaxCalculation />} />
+                <Route path="/tax-calculation" element={<TaxCalculationV2 />} />
                 <Route path="/" element={<Navigate to="/dashboard" />} />
                 {/* Add more protected routes here */}
               </Route>
