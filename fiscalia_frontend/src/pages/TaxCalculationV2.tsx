@@ -91,7 +91,9 @@ import { ChargesHelper } from '../components/tax/ChargesHelper';
 import { ProgressiveIncomeCalculator } from '../components/tax/ProgressiveIncomeCalculator';
 import { WaterfallChart } from '../components/tax/WaterfallChart';
 import { TaxOptimizationPanel } from '../components/tax/TaxOptimizationPanel';
+import { FiscalDeepResearch } from '../components/tax/FiscalDeepResearch';
 import { calculateDetailedSocialCharges } from '../utils/detailedSocialCharges2025';
+import { optimizeTaxes } from '../utils/taxOptimizer2025';
 
 // Composant pour afficher la cascade fiscale de manière visuelle
 const FiscalWaterfall: React.FC<{ data: DetailedTaxResults }> = ({ data }) => {
@@ -923,6 +925,7 @@ export default function TaxCalculationV2() {
               <Tab label="Cascade fiscale" />
               <Tab label="Détail des calculs" />
               <Tab label="Optimisation IA" icon={<Psychology />} />
+              <Tab label="Deep Research" icon={<Psychology />} />
               <Tab label="Synthèse" />
             </Tabs>
             
@@ -1125,8 +1128,23 @@ export default function TaxCalculationV2() {
               </Box>
             )}
             
-            {/* Tab 4: Synthèse */}
+            {/* Tab 4: Deep Research */}
             {activeTab === 3 && results && (
+              <Box sx={{ mt: 3 }}>
+                <FiscalDeepResearch 
+                  taxResults={results}
+                  optimizationResults={optimizeTaxes(
+                    inputs.caHT,
+                    inputs.chargesExploitation,
+                    inputs.chargesDeductibles,
+                    inputs.salaireBrut
+                  )}
+                />
+              </Box>
+            )}
+            
+            {/* Tab 5: Synthèse */}
+            {activeTab === 4 && results && (
               <Box sx={{ mt: 3 }}>
                 <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
                   {/* KPIs principaux */}

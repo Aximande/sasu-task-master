@@ -148,17 +148,24 @@ export function findOptimalDistribution(
     resultatDisponible * 0.8 // Max 80% en salaire pour garder de la marge
   );
 
-  // Points stratégiques à tester
+  // Points stratégiques à tester pour créer des scénarios mixtes
   const strategicPoints = [
-    0, // Tout en dividendes
-    CONSTRAINTS.MIN_SALAIRE_RETRAITE, // Minimum retraite
-    CONSTRAINTS.SMIC_ANNUEL, // SMIC
-    CONSTRAINTS.PASS * 0.5, // 50% PASS
-    CONSTRAINTS.PASS, // 1 PASS
-    CONSTRAINTS.PASS * 2, // 2 PASS
-    CONSTRAINTS.PASS * 3, // 3 PASS
+    0, // 100% dividendes
+    CONSTRAINTS.MIN_SALAIRE_RETRAITE, // Minimum retraite (6k€)
+    CONSTRAINTS.SMIC_ANNUEL * 0.5, // 50% SMIC (10k€)
+    CONSTRAINTS.SMIC_ANNUEL, // SMIC (21k€)
+    CONSTRAINTS.SMIC_ANNUEL * 1.5, // 1.5x SMIC (32k€)
+    CONSTRAINTS.PASS * 0.5, // 50% PASS (23k€)
+    CONSTRAINTS.PASS * 0.75, // 75% PASS (35k€)
+    CONSTRAINTS.PASS, // 1 PASS (46k€)
+    CONSTRAINTS.PASS * 1.5, // 1.5 PASS (70k€)
+    CONSTRAINTS.PASS * 2, // 2 PASS (93k€)
+    CONSTRAINTS.PASS * 2.5, // 2.5 PASS (116k€)
+    CONSTRAINTS.PASS * 3, // 3 PASS (139k€)
     42500, // Seuil IS 15%
+    60000, // Point intermédiaire
     83823, // Seuil IR 30%
+    120000, // Point intermédiaire
     180294, // Seuil IR 41%
   ].filter(s => s >= minSalaire && s <= maxSalaire);
 
