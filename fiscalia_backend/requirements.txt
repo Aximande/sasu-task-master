@@ -1,0 +1,75 @@
+# FastAPI Framework
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+
+# Database & ORM
+sqlalchemy==2.0.23
+alembic==1.12.1
+psycopg2-binary==2.9.9
+
+# Data Validation & Serialization
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# Security & Authentication
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.6
+
+# Environment & Configuration
+python-dotenv==1.0.0
+
+# HTTP Client for external APIs
+httpx==0.25.2
+aiofiles==23.2.0
+
+# Data Processing (for tax calculations)
+numpy==1.25.2
+pandas==2.1.4
+
+# Testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
+pytest-cov==4.1.0
+# httpx already included above
+
+# Development & Code Quality
+black==23.11.0
+isort==5.12.0
+flake8==6.1.0
+mypy==1.7.1
+
+# Logging & Monitoring
+structlog==23.2.0
+
+# CORS & Middleware (FastAPI has built-in CORS)
+# python-cors not needed - FastAPI includes CORS middleware
+
+# Date & Time utilities
+python-dateutil==2.8.2
+zoneinfo==0.2.1; python_version < "3.9"
+
+# Redis for caching (optional but recommended)
+redis==5.0.1
+aioredis==2.0.1
+
+# Email support (for notifications)
+fastapi-mail==1.4.1
+
+# Rate limiting
+slowapi==0.1.9
+
+# Documentation
+mkdocs==1.5.3
+mkdocs-material==9.4.8
+
+# Google Sheets Integration
+google-api-python-client==2.116.0
+google-auth==2.26.2
+google-auth-oauthlib==1.2.0
+google-auth-httplib2==0.2.0
+
+# OCR and Image Processing (for document AI)
+Pillow==10.2.0
+pytesseract==0.3.10
+PyPDF2==3.0.1 

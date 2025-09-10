@@ -1,0 +1,736 @@
+import React, { useEffect, useState } from 'react';
+import {
+  Box,
+  Container,
+  Grid,
+  Paper,
+  Typography,
+  Card,
+  CardContent,
+  CircularProgress,
+  Alert,
+  Tab,
+  Tabs,
+  Chip,
+  LinearProgress,
+  IconButton,
+  Tooltip,
+} from '@mui/material';
+import {
+  TrendingUp,
+  TrendingDown,
+  AccountBalance,
+  Receipt,
+  Warning,
+  Euro,
+  Assessment,
+  Refresh,
+  Download,
+  CalendarToday,
+} from '@mui/icons-material';
+import { format, subDays, startOfMonth, endOfMonth } from 'date-fns';
+import { fr } from 'date-fns/locale';
+import { 
+  getApplicationDate, 
+  formatParisDateTime, 
+  formatParisDate,
+  getCurrentMonthRange,
+  getCurrentFiscalYear,
+  getCurrentQuarter,
+  toApiDateFormat,
+  safeParseDate
+} from '../utils/dateUtils';
+import apiService from '../services/api.service';
+import { useAuthStore } from '../store/authStore';
+import { useCompanyStore } from '../store/companyStore';
+import {
+  LineChart,
+  Line,
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as ChartTooltip,
+  Legend,
+  ResponsiveContainer,
+} from 'recharts';
+
+interface TabPanelProps {
+  children?: React.ReactNode;
+  index: number;
+  value: number;
+}
+
+function TabPanel(props: TabPanelProps) {
+  const { children, value, index, ...other } = props;
+
+  return (
+    <div
+      role="tabpanel"
+      hidden={value !== index}
+      id={`dashboard-tabpanel-${index}`}
+      aria-labelledby={`dashboard-tab-${index}`}
+      {...other}
+    >
+      {value === index && <Box sx={{ p: 3 }}>{children}</Box>}
+    </div>
+  );
+}
+
+const Dashboard: React.FC = () => {
+  const { user } = useAuthStore();
+  const { activeCompany } = useCompanyStore();
+  const [tabValue, setTabValue] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Dashboard data states
+  const [cashFlow, setCashFlow] = useState<any>(null);
+  const [transactions, setTransactions] = useState<any[]>([]);
+  const [expenseReport, setExpenseReport] = useState<any>(null);
+  const [anomalies, setAnomalies] = useState<any[]>([]);
+  const [predictions, setPredictions] = useState<any>(null);
+
+  // Date range for analysis - using application fixed date
+  const [dateRange, setDateRange] = useState(() => {
+    const appDate = getApplicationDate();
+    return {
+      start: startOfMonth(appDate),
+      end: endOfMonth(appDate),
+    };
+  });
+
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const startDate = toApiDateFormat(dateRange.start);
+      const endDate = toApiDateFormat(dateRange.end);
+
+      // Use real Google Sheets dashboard data
+      const realDashboardResponse = await apiService.getRealDashboardData();
+      
+      if (realDashboardResponse.data.status === 'success') {
+        const dashboardData = realDashboardResponse.data.dashboard_data;
+        
+        // Set real KPIs
+        setCashFlow({
+          total_income: dashboardData.kpis.total_revenue_2025,
+          total_expenses: dashboardData.kpis.total_expenses_2025,
+          net_cash_flow: dashboardData.kpis.net_cash_flow,
+          burn_rate: dashboardData.kpis.burn_rate,
+          transaction_count: dashboardData.total_transactions
+        });
+        
+        // Set real transactions
+        setTransactions(dashboardData.recent_transactions || []);
+        
+        // Set real expense report
+        setExpenseReport(dashboardData.expense_report);
+        
+        // Set anomalies count
+        setAnomalies(Array(dashboardData.kpis.anomaly_count).fill({
+          type: 'large_transaction',
+          severity: 'medium',
+          description: 'Transaction importante détectée'
+        }));
+        
+        console.log('✅ Using real Google Sheets data:', dashboardData.total_transactions, 'transactions');
+        return; // Exit early since we have real data
+      }
+
+      // Fallback to individual API calls if real dashboard fails
+      const results = await Promise.allSettled([
+        apiService.getQontoCashFlow({ start_date: startDate, end_date: endDate }),
+        apiService.getQontoTransactions({ start_date: startDate, end_date: endDate }),
+        apiService.getQontoExpenseReport({
+          company_id: activeCompany?.id,
+          year: getCurrentFiscalYear(),
+          quarter: getCurrentQuarter(),
+        }),
+        apiService.detectQontoAnomalies(),
+        apiService.getQontoPredictions({ months_ahead: 3 }),
+      ]);
+
+      // Handle each result individually
+      const [cashFlowResult, transactionsResult, expenseResult, anomaliesResult, predictionsResult] = results;
+      
+      if (cashFlowResult.status === 'fulfilled' && cashFlowResult.value?.data) {
+        setCashFlow(cashFlowResult.value.data);
+      } else if (cashFlowResult.status === 'rejected') {
+        console.warn('Cash flow API failed:', cashFlowResult.reason);
+      }
+
+      if (transactionsResult.status === 'fulfilled' && transactionsResult.value?.data) {
+        setTransactions(transactionsResult.value.data?.transactions || []);
+      } else if (transactionsResult.status === 'rejected') {
+        console.warn('Transactions API failed:', transactionsResult.reason);
+      }
+
+      if (expenseResult.status === 'fulfilled' && expenseResult.value?.data) {
+        setExpenseReport(expenseResult.value.data);
+      } else if (expenseResult.status === 'rejected') {
+        console.warn('Expense report API failed:', expenseResult.reason);
+      }
+
+      if (anomaliesResult.status === 'fulfilled' && anomaliesResult.value?.data) {
+        setAnomalies(anomaliesResult.value.data?.anomalies || []);
+      } else if (anomaliesResult.status === 'rejected') {
+        console.warn('Anomalies API failed:', anomaliesResult.reason);
+      }
+
+      if (predictionsResult.status === 'fulfilled' && predictionsResult.value?.data) {
+        setPredictions(predictionsResult.value.data);
+      } else if (predictionsResult.status === 'rejected') {
+        console.warn('Predictions API failed:', predictionsResult.reason);
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to load dashboard data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, [dateRange, activeCompany]);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await fetchDashboardData();
+    setRefreshing(false);
+  };
+
+  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+    setTabValue(newValue);
+  };
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('fr-FR', {
+      style: 'currency',
+      currency: 'EUR',
+    }).format(amount);
+  };
+
+  const formatPercentage = (value: number) => {
+    return `${(value * 100).toFixed(1)}%`;
+  };
+
+  // Prepare chart data with safe date parsing
+  const cashFlowChartData = React.useMemo(() => {
+    try {
+      if (!Array.isArray(transactions) || transactions.length === 0) {
+        return [];
+      }
+      
+      return transactions
+        .slice(0, 30)
+    .map((trans) => {
+      try {
+        if (!trans || typeof trans !== 'object') {
+          return null;
+        }
+        
+        const safeDate = safeParseDate(trans.settled_at || trans['settled at']);
+        const amount = parseFloat(trans.amount) || 0;
+        
+        return {
+          date: safeDate ? formatParisDate(safeDate, 'dd MMM') : 'Date invalide',
+          amount: trans.side === 'credit' ? amount : -amount,
+          type: trans.side || 'unknown',
+        };
+      } catch (error) {
+        console.error('Error processing transaction for chart:', error, trans);
+        return null;
+      }
+    })
+        .filter((item) => item !== null && item.date !== 'Date invalide') // Remove invalid items
+        .reverse();
+    } catch (error) {
+      console.error('Error preparing chart data:', error);
+      return [];
+    }
+  }, [transactions]);
+
+  const categoryColors = [
+    '#3f51b5',
+    '#f50057',
+    '#00bcd4',
+    '#4caf50',
+    '#ff9800',
+    '#9c27b0',
+  ];
+
+  const expenseByCategoryData = expenseReport?.expense_by_category
+    ? Object.entries(expenseReport.expense_by_category).map(([category, amount]) => ({
+        name: category,
+        value: amount as number,
+      }))
+    : [];
+
+  if (loading) {
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="80vh">
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  return (
+    <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
+      {/* Header */}
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+        <Box>
+          <Typography variant="h4" gutterBottom>
+            Tableau de Bord
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Bonjour {user?.full_name || user?.email} • {activeCompany?.name || 'Aucune société'}
+          </Typography>
+        </Box>
+        <Box>
+          <Tooltip title="Rafraîchir les données">
+            <IconButton onClick={handleRefresh} disabled={refreshing}>
+              <Refresh />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Exporter le rapport">
+            <IconButton>
+              <Download />
+            </IconButton>
+          </Tooltip>
+        </Box>
+      </Box>
+      {error && (
+        <Alert severity="error" sx={{ mb: 3 }}>
+          {error}
+        </Alert>
+      )}
+      {/* Key Metrics Cards */}
+      <Grid container spacing={3} mb={3}>
+        <Grid
+          size={{
+            xs: 12,
+            sm: 6,
+            md: 3
+          }}>
+          <Card>
+            <CardContent>
+              <Box display="flex" alignItems="center" justifyContent="space-between">
+                <Box>
+                  <Typography color="textSecondary" gutterBottom variant="body2">
+                    Revenus (30j)
+                  </Typography>
+                  <Typography variant="h5" component="div">
+                    {formatCurrency(cashFlow?.total_income || 0)}
+                  </Typography>
+                  <Box display="flex" alignItems="center" mt={1}>
+                    <TrendingUp color="success" fontSize="small" />
+                    <Typography variant="body2" color="success.main" sx={{ ml: 0.5 }}>
+                      +12.5%
+                    </Typography>
+                  </Box>
+                </Box>
+                <AccountBalance color="primary" fontSize="large" />
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid
+          size={{
+            xs: 12,
+            sm: 6,
+            md: 3
+          }}>
+          <Card>
+            <CardContent>
+              <Box display="flex" alignItems="center" justifyContent="space-between">
+                <Box>
+                  <Typography color="textSecondary" gutterBottom variant="body2">
+                    Dépenses (30j)
+                  </Typography>
+                  <Typography variant="h5" component="div">
+                    {formatCurrency(Math.abs(cashFlow?.total_expenses || 0))}
+                  </Typography>
+                  <Box display="flex" alignItems="center" mt={1}>
+                    <TrendingDown color="error" fontSize="small" />
+                    <Typography variant="body2" color="error.main" sx={{ ml: 0.5 }}>
+                      +8.3%
+                    </Typography>
+                  </Box>
+                </Box>
+                <Receipt color="error" fontSize="large" />
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid
+          size={{
+            xs: 12,
+            sm: 6,
+            md: 3
+          }}>
+          <Card>
+            <CardContent>
+              <Box display="flex" alignItems="center" justifyContent="space-between">
+                <Box>
+                  <Typography color="textSecondary" gutterBottom variant="body2">
+                    Cash Flow Net
+                  </Typography>
+                  <Typography variant="h5" component="div">
+                    {formatCurrency(cashFlow?.net_cash_flow || 0)}
+                  </Typography>
+                  <Box display="flex" alignItems="center" mt={1}>
+                    <Typography variant="body2" color="text.secondary">
+                      Burn rate: {formatCurrency(cashFlow?.burn_rate || 0)}/mois
+                    </Typography>
+                  </Box>
+                </Box>
+                <Euro color="action" fontSize="large" />
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid
+          size={{
+            xs: 12,
+            sm: 6,
+            md: 3
+          }}>
+          <Card>
+            <CardContent>
+              <Box display="flex" alignItems="center" justifyContent="space-between">
+                <Box>
+                  <Typography color="textSecondary" gutterBottom variant="body2">
+                    Anomalies
+                  </Typography>
+                  <Typography variant="h5" component="div">
+                    {anomalies?.length || 0}
+                  </Typography>
+                  <Box display="flex" alignItems="center" mt={1}>
+                    {anomalies?.length > 0 ? (
+                      <Chip
+                        label="À vérifier"
+                        color="warning"
+                        size="small"
+                        icon={<Warning />}
+                      />
+                    ) : (
+                      <Chip label="Tout est OK" color="success" size="small" />
+                    )}
+                  </Box>
+                </Box>
+                <Assessment color="warning" fontSize="large" />
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+      {/* Tabs for different views */}
+      <Paper sx={{ mb: 3 }}>
+        <Tabs value={tabValue} onChange={handleTabChange} aria-label="dashboard tabs">
+          <Tab label="Vue d'ensemble" />
+          <Tab label="Transactions" />
+          <Tab label="Analyse fiscale" />
+          <Tab label="Prédictions" />
+        </Tabs>
+      </Paper>
+      {/* Tab Panels */}
+      <TabPanel value={tabValue} index={0}>
+        <Grid container spacing={3}>
+          {/* Cash Flow Chart */}
+          <Grid
+            size={{
+              xs: 12,
+              md: 8
+            }}>
+            <Paper sx={{ p: 2 }}>
+              <Typography variant="h6" gutterBottom>
+                Évolution du Cash Flow
+              </Typography>
+              <ResponsiveContainer width="100%" height={300}>
+                <AreaChart data={cashFlowChartData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="date" />
+                  <YAxis />
+                  <ChartTooltip formatter={(value) => formatCurrency(Number(value))} />
+                  <Area
+                    type="monotone"
+                    dataKey="amount"
+                    stroke="#3f51b5"
+                    fill="#3f51b5"
+                    fillOpacity={0.6}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </Paper>
+          </Grid>
+
+          {/* Expense by Category Pie Chart */}
+          <Grid
+            size={{
+              xs: 12,
+              md: 4
+            }}>
+            <Paper sx={{ p: 2 }}>
+              <Typography variant="h6" gutterBottom>
+                Dépenses par Catégorie
+              </Typography>
+              <ResponsiveContainer width="100%" height={300}>
+                <PieChart>
+                  <Pie
+                    data={expenseByCategoryData}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={(entry) => `${entry.name}: ${formatCurrency(Number(entry.value) || 0)}`}
+                    outerRadius={80}
+                    fill="#8884d8"
+                    dataKey="value"
+                  >
+                    {expenseByCategoryData.map((entry, index) => (
+                      <Cell
+                        key={`cell-${index}`}
+                        fill={categoryColors[index % categoryColors.length]}
+                      />
+                    ))}
+                  </Pie>
+                  <ChartTooltip formatter={(value) => formatCurrency(Number(value))} />
+                </PieChart>
+              </ResponsiveContainer>
+            </Paper>
+          </Grid>
+        </Grid>
+      </TabPanel>
+      <TabPanel value={tabValue} index={1}>
+        {/* Recent Transactions */}
+        <Paper sx={{ p: 2 }}>
+          <Typography variant="h6" gutterBottom>
+            Transactions Récentes
+          </Typography>
+          <Box sx={{ maxHeight: 400, overflow: 'auto' }}>
+            {Array.isArray(transactions) && transactions.slice(0, 20).map((trans, index) => trans && (
+              <Box
+                key={index}
+                sx={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  py: 1.5,
+                  px: 2,
+                  borderBottom: '1px solid #e0e0e0',
+                  '&:hover': { backgroundColor: '#f5f5f5' },
+                }}
+              >
+                <Box>
+                  <Typography variant="body1">{trans['counterparty name'] || trans.counterparty_name || 'N/A'}</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {formatParisDateTime(trans.settled_at || trans['settled at'], 'dd MMM yyyy')} •{' '}
+                    {trans.accounting_category || trans.category || 'N/A'}
+                  </Typography>
+                </Box>
+                <Box textAlign="right">
+                  <Typography
+                    variant="body1"
+                    color={trans?.side === 'credit' ? 'success.main' : 'text.primary'}
+                    fontWeight="medium"
+                  >
+                    {trans?.side === 'credit' ? '+' : '-'}
+                    {formatCurrency(Math.abs(trans?.amount || 0))}
+                  </Typography>
+                  {trans?.vat_amount_parsed && (
+                    <Typography variant="caption" color="text.secondary">
+                      TVA: {formatCurrency(trans.vat_amount_parsed)}
+                    </Typography>
+                  )}
+                </Box>
+              </Box>
+            )))}
+          </Box>
+        </Paper>
+      </TabPanel>
+      <TabPanel value={tabValue} index={2}>
+        {/* Tax Analysis */}
+        <Grid container spacing={3}>
+          <Grid
+            size={{
+              xs: 12,
+              md: 6
+            }}>
+            <Paper sx={{ p: 2 }}>
+              <Typography variant="h6" gutterBottom>
+                Rapport Fiscal T{Math.ceil((new Date().getMonth() + 1) / 3)} 2024
+              </Typography>
+              <Box sx={{ mt: 2 }}>
+                <Box display="flex" justifyContent="space-between" py={1}>
+                  <Typography>Total des dépenses</Typography>
+                  <Typography fontWeight="medium">
+                    {formatCurrency(expenseReport?.total_expenses || 0)}
+                  </Typography>
+                </Box>
+                <Box display="flex" justifyContent="space-between" py={1}>
+                  <Typography>Déductible fiscalement</Typography>
+                  <Typography fontWeight="medium" color="success.main">
+                    {formatCurrency(expenseReport?.total_deductible || 0)}
+                  </Typography>
+                </Box>
+                <Box display="flex" justifyContent="space-between" py={1}>
+                  <Typography>TVA déductible</Typography>
+                  <Typography fontWeight="medium" color="primary.main">
+                    {formatCurrency(expenseReport?.vat_deductible || 0)}
+                  </Typography>
+                </Box>
+                <Box display="flex" justifyContent="space-between" py={1}>
+                  <Typography>Non déductible</Typography>
+                  <Typography fontWeight="medium" color="error.main">
+                    {formatCurrency(expenseReport?.non_deductible || 0)}
+                  </Typography>
+                </Box>
+              </Box>
+            </Paper>
+          </Grid>
+
+          <Grid
+            size={{
+              xs: 12,
+              md: 6
+            }}>
+            <Paper sx={{ p: 2 }}>
+              <Typography variant="h6" gutterBottom>
+                Optimisation Fiscale
+              </Typography>
+              <Box sx={{ mt: 2 }}>
+                <Typography variant="body2" paragraph>
+                  Basé sur vos transactions actuelles, voici des opportunités d'optimisation :
+                </Typography>
+                <Box component="ul" sx={{ pl: 2 }}>
+                  <Typography component="li" variant="body2" gutterBottom>
+                    Augmenter les frais professionnels déductibles
+                  </Typography>
+                  <Typography component="li" variant="body2" gutterBottom>
+                    Optimiser le ratio salaire/dividendes
+                  </Typography>
+                  <Typography component="li" variant="body2" gutterBottom>
+                    Planifier les investissements éligibles au CIR
+                  </Typography>
+                </Box>
+                <LinearProgress
+                  variant="determinate"
+                  value={75}
+                  sx={{ mt: 2, height: 8, borderRadius: 4 }}
+                />
+                <Typography variant="caption" color="text.secondary">
+                  Potentiel d'économie: {formatCurrency(5000)}
+                </Typography>
+              </Box>
+            </Paper>
+          </Grid>
+        </Grid>
+      </TabPanel>
+      <TabPanel value={tabValue} index={3}>
+        {/* Predictions */}
+        <Grid container spacing={3}>
+          <Grid size={12}>
+            <Paper sx={{ p: 2 }}>
+              <Typography variant="h6" gutterBottom>
+                Prédictions (3 prochains mois)
+              </Typography>
+              <Grid container spacing={3} sx={{ mt: 1 }}>
+                <Grid
+                  size={{
+                    xs: 12,
+                    md: 4
+                  }}>
+                  <Box>
+                    <Typography variant="body2" color="text.secondary" gutterBottom>
+                      Dépenses totales prévues
+                    </Typography>
+                    <Typography variant="h5">
+                      {formatCurrency(predictions?.total_predicted_expenses || 0)}
+                    </Typography>
+                  </Box>
+                </Grid>
+                <Grid
+                  size={{
+                    xs: 12,
+                    md: 4
+                  }}>
+                  <Box>
+                    <Typography variant="body2" color="text.secondary" gutterBottom>
+                      Moyenne mensuelle
+                    </Typography>
+                    <Typography variant="h5">
+                      {formatCurrency(predictions?.monthly_average || 0)}
+                    </Typography>
+                  </Box>
+                </Grid>
+                <Grid
+                  size={{
+                    xs: 12,
+                    md: 4
+                  }}>
+                  <Box>
+                    <Typography variant="body2" color="text.secondary" gutterBottom>
+                      Tendance
+                    </Typography>
+                    <Box display="flex" alignItems="center">
+                      <TrendingUp color="warning" />
+                      <Typography variant="h5" sx={{ ml: 1 }}>
+                        +5.2%
+                      </Typography>
+                    </Box>
+                  </Box>
+                </Grid>
+              </Grid>
+
+              {predictions?.recommendations && (
+                <Box sx={{ mt: 3 }}>
+                  <Typography variant="subtitle1" gutterBottom>
+                    Recommandations
+                  </Typography>
+                  {predictions.recommendations.map((rec: string, index: number) => (
+                    <Alert key={index} severity="info" sx={{ mt: 1 }}>
+                      {rec}
+                    </Alert>
+                  ))}
+                </Box>
+              )}
+            </Paper>
+          </Grid>
+        </Grid>
+      </TabPanel>
+      {/* Anomalies Alert */}
+      {anomalies?.length > 0 && (
+        <Alert severity="warning" sx={{ mt: 3 }}>
+          <Typography variant="subtitle1" gutterBottom>
+            {anomalies.length} anomalie(s) détectée(s)
+          </Typography>
+          {anomalies.slice(0, 3).map((anomaly, index) => (
+            <Box key={index} sx={{ mt: 1 }}>
+              <Typography variant="body2">
+                • {anomaly?.transaction?.['counterparty name'] || anomaly?.transaction?.counterparty_name || 'N/A'} -{' '}
+                {formatCurrency(anomaly?.transaction?.amount || 0)}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                {anomaly?.reasons?.join(', ') || 'Anomalie détectée'}
+              </Typography>
+            </Box>
+          ))}
+        </Alert>
+      )}
+    </Container>
+  );
+};
+
+export default Dashboard;
