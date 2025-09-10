@@ -63,6 +63,7 @@ import {
   Help,
   CheckCircle,
   Error,
+  Psychology,
 } from '@mui/icons-material';
 import {
   BarChart,
@@ -89,6 +90,7 @@ import { DetailedCalculationCard } from '../components/tax/DetailedCalculationCa
 import { ChargesHelper } from '../components/tax/ChargesHelper';
 import { ProgressiveIncomeCalculator } from '../components/tax/ProgressiveIncomeCalculator';
 import { WaterfallChart } from '../components/tax/WaterfallChart';
+import { TaxOptimizationPanel } from '../components/tax/TaxOptimizationPanel';
 import { calculateDetailedSocialCharges } from '../utils/detailedSocialCharges2025';
 
 // Composant pour afficher la cascade fiscale de manière visuelle
@@ -920,7 +922,7 @@ export default function TaxCalculationV2() {
             <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)}>
               <Tab label="Cascade fiscale" />
               <Tab label="Détail des calculs" />
-              <Tab label="Optimisation" />
+              <Tab label="Optimisation IA" icon={<Psychology />} />
               <Tab label="Synthèse" />
             </Tabs>
             
@@ -1106,85 +1108,20 @@ export default function TaxCalculationV2() {
               </Box>
             )}
             
-            {/* Tab 3: Optimisation */}
-            {activeTab === 2 && results && (
+            {/* Tab 3: Optimisation IA */}
+            {activeTab === 2 && (
               <Box sx={{ mt: 3 }}>
-                <Stack spacing={3}>
-                  {/* Comparaison salaire/dividendes */}
-                  <Card>
-                    <CardContent>
-                      <Typography variant="h6" gutterBottom>
-                        Arbitrage salaire vs dividendes
-                      </Typography>
-                      <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
-                        <Box sx={{ flex: 1 }}>
-                          <Typography variant="subtitle2" color="primary">
-                            Pour 1000€ de salaire
-                          </Typography>
-                          <Typography variant="body1">
-                            Coût entreprise: {formatCurrency(results.comparaisons.salaireVsDividendes.coutSalaire1000)}
-                          </Typography>
-                          <Typography variant="body2" color="text.secondary">
-                            Protection sociale complète
-                          </Typography>
-                        </Box>
-                        <Box sx={{ flex: 1 }}>
-                          <Typography variant="subtitle2" color="primary">
-                            Pour 1000€ de dividendes
-                          </Typography>
-                          <Typography variant="body1">
-                            Coût après IS: {formatCurrency(results.comparaisons.salaireVsDividendes.coutDividende1000)}
-                          </Typography>
-                          <Typography variant="body2" color="text.secondary">
-                            Pas de protection sociale
-                          </Typography>
-                        </Box>
-                      </Box>
-                      
-                      <Alert severity="info" sx={{ mt: 2 }}>
-                        <Typography variant="body2">
-                          <strong>Recommandation:</strong> Salaire optimal de {formatCurrency(results.synthese.salaireOptimal)} 
-                          + dividendes de {formatCurrency(results.synthese.dividendesOptimaux)}
-                        </Typography>
-                      </Alert>
-                    </CardContent>
-                  </Card>
-                  
-                  {/* Validation retraite */}
-                  <Card>
-                    <CardContent>
-                      <Typography variant="h6" gutterBottom>
-                        Validation trimestres retraite
-                      </Typography>
-                      <LinearProgress
-                        variant="determinate"
-                        value={results.retraite.trimestresValides * 25}
-                        sx={{ height: 10, borderRadius: 1, mb: 2 }}
-                      />
-                      <Typography variant="body1">
-                        {results.retraite.trimestresValides}/4 trimestres validés
-                      </Typography>
-                      {results.retraite.manquePourValidation && (
-                        <Alert severity="warning" sx={{ mt: 1 }}>
-                          Il manque {formatCurrency(results.retraite.manquePourValidation)} de salaire 
-                          pour valider 4 trimestres
-                        </Alert>
-                      )}
-                    </CardContent>
-                  </Card>
-                  
-                  {/* Économies potentielles */}
-                  {results.synthese.economiesPotentielles > 1000 && (
-                    <Alert severity="success">
-                      <Typography variant="body1">
-                        <strong>Économies potentielles:</strong> {formatCurrency(results.synthese.economiesPotentielles)}
-                      </Typography>
-                      <Typography variant="body2">
-                        En optimisant le mix salaire/dividendes selon nos recommandations
-                      </Typography>
-                    </Alert>
-                  )}
-                </Stack>
+                <TaxOptimizationPanel 
+                  inputs={inputs}
+                  onApplyOptimization={(salaire, dividendes) => {
+                    setInputs({
+                      ...inputs,
+                      salaireBrut: salaire,
+                      dividendesBruts: dividendes
+                    });
+                    setActiveTab(0); // Retour à la cascade fiscale
+                  }}
+                />
               </Box>
             )}
             
