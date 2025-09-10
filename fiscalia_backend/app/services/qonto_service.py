@@ -22,7 +22,7 @@ class QontoService:
     
     def __init__(self):
         # Google Sheets configuration - exact Qonto Connect format
-        self.sheets_id = os.getenv('QONTO_SHEETS_ID', '10u_3D39lHyeHAOkujcR5KEnxfermJhYw9BrQ6DEG3c8')
+        self.sheets_id = settings.QONTO_SHEETS_ID or '10u_3D39lHyeHAOkujcR5KEnxfermJhYw9BrQ6DEG3c8'
         self.sheets_range = 'Sync. transactions - Do not edit!A:U'  # All columns from Qonto sheet, correct tab name
         
         # Transaction categories for French accounting
@@ -121,7 +121,7 @@ class QontoService:
         """Authenticate with Google Sheets API."""
         try:
             # Method 1: Service account credentials (recommended)
-            credentials_path = os.getenv('GOOGLE_SERVICE_ACCOUNT_KEY', '')
+            credentials_path = settings.GOOGLE_SERVICE_ACCOUNT_KEY
             if credentials_path and os.path.exists(credentials_path):
                 credentials = service_account.Credentials.from_service_account_file(
                     credentials_path,
@@ -131,7 +131,7 @@ class QontoService:
                 return service.spreadsheets()
             
             # Method 2: API Key (if sheet is publicly readable)
-            api_key = os.getenv('GOOGLE_SHEETS_API_KEY', '')
+            api_key = getattr(settings, 'GOOGLE_SHEETS_API_KEY', None)
             if api_key:
                 service = build('sheets', 'v4', developerKey=api_key)
                 return service.spreadsheets()

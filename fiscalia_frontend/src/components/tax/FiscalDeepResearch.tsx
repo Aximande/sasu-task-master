@@ -37,7 +37,6 @@ import {
   TrendingUp,
   Security,
   AccountBalance,
-  Family,
   Home,
   School,
   ExpandMore,
@@ -474,10 +473,10 @@ export const FiscalDeepResearch: React.FC<FiscalDeepResearchProps> = ({
                     value={persona.horizonTemporel || '3-5 ans'}
                     onChange={(e) => setPersona({...persona, horizonTemporel: e.target.value})}
                   >
-                    <MenuItem value="< 1 an">Court terme (< 1 an)</MenuItem>
+                    <MenuItem value="< 1 an">Court terme (&lt; 1 an)</MenuItem>
                     <MenuItem value="1-3 ans">Moyen terme (1-3 ans)</MenuItem>
                     <MenuItem value="3-5 ans">Long terme (3-5 ans)</MenuItem>
-                    <MenuItem value="> 5 ans">Très long terme (> 5 ans)</MenuItem>
+                    <MenuItem value="> 5 ans">Très long terme (&gt; 5 ans)</MenuItem>
                   </Select>
                 </FormControl>
 
