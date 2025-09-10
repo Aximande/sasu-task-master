@@ -88,6 +88,7 @@ import {
 import { DetailedCalculationCard } from '../components/tax/DetailedCalculationCard';
 import { ChargesHelper } from '../components/tax/ChargesHelper';
 import { ProgressiveIncomeCalculator } from '../components/tax/ProgressiveIncomeCalculator';
+import { WaterfallChart } from '../components/tax/WaterfallChart';
 import { calculateDetailedSocialCharges } from '../utils/detailedSocialCharges2025';
 
 // Composant pour afficher la cascade fiscale de manière visuelle
@@ -926,7 +927,10 @@ export default function TaxCalculationV2() {
             {/* Tab 1: Cascade fiscale */}
             {activeTab === 0 && results && (
               <Box sx={{ mt: 3 }}>
-                <FiscalWaterfall data={results} />
+                <WaterfallChart data={results} />
+                <Box sx={{ mt: 4 }}>
+                  <FiscalWaterfall data={results} />
+                </Box>
               </Box>
             )}
             
