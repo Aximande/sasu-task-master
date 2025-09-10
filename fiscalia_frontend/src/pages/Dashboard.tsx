@@ -30,6 +30,7 @@ import {
   TableHead,
   TableRow,
   TableSortLabel,
+  Divider,
 } from '@mui/material';
 import {
   TrendingUp,
@@ -130,6 +131,18 @@ const Dashboard: React.FC = () => {
     total_expenses: 0,
     net_cash_flow: 0,
     burn_rate: 0
+  });
+  
+  // Calculated tax report based on selected date range
+  const [calculatedTaxReport, setCalculatedTaxReport] = useState<any>({
+    total_expenses: 0,
+    total_deductible: 0,
+    vat_deductible: 0,
+    non_deductible: 0,
+    vat_collected: 0,
+    vat_balance: 0,
+    estimated_income_tax: 0,
+    estimated_corporate_tax: 0
   });
 
   // Transaction filtering and sorting states
@@ -502,6 +515,83 @@ const Dashboard: React.FC = () => {
       });
       
       console.log(`📊 KPIs recalculated for ${getCurrentPresetLabel()}: Income: ${income}, Expenses: ${expenses}, Net: ${netCashFlow}`);
+    }
+  }, [transactions, dateRange]);
+
+  // Calculate tax report based on filtered transactions
+  useEffect(() => {
+    const allTransactions = (window as any).__allTransactions || transactions;
+    
+    if (Array.isArray(allTransactions) && allTransactions.length > 0) {
+      // Filter transactions by current date range
+      const filteredByDate = allTransactions.filter(trans => {
+        const dateStr = trans?.['settled at'] || trans?.settled_at || trans?.['emitted at'] || trans?.emitted_at;
+        if (!dateStr) return false;
+        
+        const transDate = safeParseDate(dateStr);
+        if (!transDate) return false;
+        
+        const endOfDay = new Date(dateRange.end);
+        endOfDay.setHours(23, 59, 59, 999);
+        
+        return transDate >= dateRange.start && transDate <= endOfDay;
+      });
+      
+      // Calculate tax metrics
+      let totalExpenses = 0;
+      let totalDeductible = 0;
+      let vatDeductible = 0;
+      let vatCollected = 0;
+      let totalIncome = 0;
+      
+      filteredByDate.forEach(trans => {
+        const amount = parseFloat(trans?.amount || trans?.amount_parsed || '0');
+        const vatAmount = parseFloat(trans?.['vat amount'] || trans?.vat_amount_parsed || '0');
+        
+        if (trans?.side === 'debit') {
+          totalExpenses += amount;
+          
+          // Estimate deductibility based on category
+          const category = (trans?.category || trans?.['category'] || '').toLowerCase();
+          const isDeductible = !category.includes('personal') && 
+                              !category.includes('dividende') && 
+                              !category.includes('retrait');
+          
+          if (isDeductible) {
+            totalDeductible += amount;
+            if (vatAmount > 0) {
+              vatDeductible += vatAmount;
+            }
+          }
+        } else if (trans?.side === 'credit') {
+          totalIncome += amount;
+          if (vatAmount > 0) {
+            vatCollected += vatAmount;
+          }
+        }
+      });
+      
+      const nonDeductible = totalExpenses - totalDeductible;
+      const vatBalance = vatCollected - vatDeductible;
+      
+      // Estimate taxes (simplified calculation)
+      const taxableIncome = totalIncome - totalDeductible;
+      const estimatedCorporateTax = taxableIncome > 0 ? taxableIncome * 0.15 : 0; // 15% IS taux réduit
+      const estimatedIncomeTax = taxableIncome > 0 ? taxableIncome * 0.30 : 0; // Estimation IR
+      
+      setCalculatedTaxReport({
+        total_expenses: totalExpenses,
+        total_deductible: totalDeductible,
+        vat_deductible: vatDeductible,
+        non_deductible: nonDeductible,
+        vat_collected: vatCollected,
+        vat_balance: vatBalance,
+        estimated_income_tax: estimatedIncomeTax,
+        estimated_corporate_tax: estimatedCorporateTax,
+        taxable_income: taxableIncome
+      });
+      
+      console.log(`📊 Tax report calculated for ${getCurrentPresetLabel()}`);
     }
   }, [transactions, dateRange]);
 
@@ -1613,31 +1703,38 @@ const Dashboard: React.FC = () => {
           <Box flex="1" minWidth="400px">
             <Paper sx={{ p: 2 }}>
               <Typography variant="h6" gutterBottom>
-                Rapport Fiscal T{Math.ceil((new Date().getMonth() + 1) / 3)} 2024
+                Rapport Fiscal - {getCurrentPresetLabel()}
               </Typography>
               <Box sx={{ mt: 2 }}>
                 <Box display="flex" justifyContent="space-between" py={1}>
+                  <Typography>Total des revenus</Typography>
+                  <Typography fontWeight="medium" color="success.main">
+                    {formatCurrency(calculatedKPIs.total_income || 0)}
+                  </Typography>
+                </Box>
+                <Box display="flex" justifyContent="space-between" py={1}>
                   <Typography>Total des dépenses</Typography>
                   <Typography fontWeight="medium">
-                    {formatCurrency(expenseReport?.total_expenses || 0)}
+                    {formatCurrency(calculatedTaxReport.total_expenses || 0)}
                   </Typography>
                 </Box>
                 <Box display="flex" justifyContent="space-between" py={1}>
-                  <Typography>Déductible fiscalement</Typography>
+                  <Typography>Charges déductibles</Typography>
                   <Typography fontWeight="medium" color="success.main">
-                    {formatCurrency(expenseReport?.total_deductible || 0)}
+                    {formatCurrency(calculatedTaxReport.total_deductible || 0)}
                   </Typography>
                 </Box>
                 <Box display="flex" justifyContent="space-between" py={1}>
-                  <Typography>TVA déductible</Typography>
-                  <Typography fontWeight="medium" color="primary.main">
-                    {formatCurrency(expenseReport?.vat_deductible || 0)}
-                  </Typography>
-                </Box>
-                <Box display="flex" justifyContent="space-between" py={1}>
-                  <Typography>Non déductible</Typography>
+                  <Typography>Charges non déductibles</Typography>
                   <Typography fontWeight="medium" color="error.main">
-                    {formatCurrency(expenseReport?.non_deductible || 0)}
+                    {formatCurrency(calculatedTaxReport.non_deductible || 0)}
+                  </Typography>
+                </Box>
+                <Divider sx={{ my: 2 }} />
+                <Box display="flex" justifyContent="space-between" py={1}>
+                  <Typography fontWeight="bold">Résultat imposable</Typography>
+                  <Typography fontWeight="bold" color={calculatedTaxReport.taxable_income > 0 ? "success.main" : "error.main"}>
+                    {formatCurrency(calculatedTaxReport.taxable_income || 0)}
                   </Typography>
                 </Box>
               </Box>
@@ -1647,31 +1744,60 @@ const Dashboard: React.FC = () => {
           <Box flex="1" minWidth="400px">
             <Paper sx={{ p: 2 }}>
               <Typography variant="h6" gutterBottom>
-                Optimisation Fiscale
+                TVA & Estimations Fiscales
               </Typography>
               <Box sx={{ mt: 2 }}>
-                <Typography variant="body2" paragraph>
-                  Basé sur vos transactions actuelles, voici des opportunités d'optimisation :
+                <Typography variant="subtitle2" color="primary" gutterBottom>
+                  Gestion TVA
                 </Typography>
-                <Box component="ul" sx={{ pl: 2 }}>
-                  <Typography component="li" variant="body2" gutterBottom>
-                    Augmenter les frais professionnels déductibles
-                  </Typography>
-                  <Typography component="li" variant="body2" gutterBottom>
-                    Optimiser le ratio salaire/dividendes
-                  </Typography>
-                  <Typography component="li" variant="body2" gutterBottom>
-                    Planifier les investissements éligibles au CIR
+                <Box display="flex" justifyContent="space-between" py={1}>
+                  <Typography variant="body2">TVA collectée</Typography>
+                  <Typography fontWeight="medium">
+                    {formatCurrency(calculatedTaxReport.vat_collected || 0)}
                   </Typography>
                 </Box>
-                <LinearProgress
-                  variant="determinate"
-                  value={75}
-                  sx={{ mt: 2, height: 8, borderRadius: 4 }}
-                />
-                <Typography variant="caption" color="text.secondary">
-                  Potentiel d'économie: {formatCurrency(5000)}
+                <Box display="flex" justifyContent="space-between" py={1}>
+                  <Typography variant="body2">TVA déductible</Typography>
+                  <Typography fontWeight="medium">
+                    {formatCurrency(calculatedTaxReport.vat_deductible || 0)}
+                  </Typography>
+                </Box>
+                <Box display="flex" justifyContent="space-between" py={1} sx={{ 
+                  backgroundColor: calculatedTaxReport.vat_balance > 0 ? 'error.light' : 'success.light',
+                  px: 1,
+                  borderRadius: 1
+                }}>
+                  <Typography variant="body2" fontWeight="bold">
+                    {calculatedTaxReport.vat_balance > 0 ? 'TVA à payer' : 'Crédit de TVA'}
+                  </Typography>
+                  <Typography fontWeight="bold">
+                    {formatCurrency(Math.abs(calculatedTaxReport.vat_balance || 0))}
+                  </Typography>
+                </Box>
+                
+                <Divider sx={{ my: 2 }} />
+                
+                <Typography variant="subtitle2" color="primary" gutterBottom>
+                  Estimations d'Impôts
                 </Typography>
+                <Box display="flex" justifyContent="space-between" py={1}>
+                  <Typography variant="body2">Impôt sur les sociétés (15%)</Typography>
+                  <Typography fontWeight="medium" color="warning.main">
+                    {formatCurrency(calculatedTaxReport.estimated_corporate_tax || 0)}
+                  </Typography>
+                </Box>
+                <Box display="flex" justifyContent="space-between" py={1}>
+                  <Typography variant="body2">Estimation IR (30%)</Typography>
+                  <Typography fontWeight="medium" color="warning.main">
+                    {formatCurrency(calculatedTaxReport.estimated_income_tax || 0)}
+                  </Typography>
+                </Box>
+                
+                <Alert severity="info" sx={{ mt: 2 }}>
+                  <Typography variant="caption">
+                    Ces estimations sont simplifiées. Consultez votre expert-comptable pour une analyse précise.
+                  </Typography>
+                </Alert>
               </Box>
             </Paper>
           </Box>
